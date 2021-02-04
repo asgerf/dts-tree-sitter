@@ -9,7 +9,7 @@ npm i @asgerf/dts-tree-sitter
 
 npx @asgerf/dts-tree-sitter INPUT > OUTPUT.d.ts
 ```
-If the above command fail:
+Alternative if you prefer to run without `npx`:
 
 ```sh
 node ./node_modules/@asgerf/dts-tree-sitter/build/src/index.js INPUT > OUTPUT.d.ts
