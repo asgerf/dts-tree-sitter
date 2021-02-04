@@ -30,7 +30,7 @@ npm i tree-sitter-javascript
 npx @asgerf/dts-tree-sitter tree-sitter-javascript > generated.d.ts
 ```
 
-Fallback to the above command:
+Alternative if you prefer to run without `npx`:
 
 ```sh
 node ./node_modules/@asgerf/dts-tree-sitter/build/src/index.js tree-sitter-javascript > generated.d.ts
