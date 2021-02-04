@@ -9,6 +9,11 @@ npm i @asgerf/dts-tree-sitter
 
 npx @asgerf/dts-tree-sitter INPUT > OUTPUT.d.ts
 ```
+Alternative if you prefer to run without `npx`:
+
+```sh
+node ./node_modules/@asgerf/dts-tree-sitter/build/src/index.js INPUT > OUTPUT.d.ts
+```
 
 where `INPUT` is used to locate a `node-types.json` file in one of the following locations:
 - `${INPUT}`
@@ -19,9 +24,16 @@ where `INPUT` is used to locate a `node-types.json` file in one of the following
 ## Example
 
 The `tree-sitter-javascript` grammar can be compiled like this:
+
 ```sh
 npm i tree-sitter-javascript
 npx @asgerf/dts-tree-sitter tree-sitter-javascript > generated.d.ts
+```
+
+Alternative if you prefer to run without `npx`:
+
+```sh
+node ./node_modules/@asgerf/dts-tree-sitter/build/src/index.js tree-sitter-javascript > generated.d.ts
 ```
 
 In the resulting grammar, two of the node types look like this:
