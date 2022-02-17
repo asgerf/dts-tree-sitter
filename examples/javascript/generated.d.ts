@@ -1,4 +1,4 @@
-export interface Parser {
+export class Parser {
   parse(input: string | Input | InputReader, oldTree?: Tree, options?: { bufferSize?: number, includedRanges?: Range[] }): Tree;
   parseTextBuffer(buffer: TextBuffer, oldTree?: Tree, options?: { syncTimeoutMicros?: number, includedRanges?: Range[] }): Tree | Promise<Tree>;
   parseTextBufferSync(buffer: TextBuffer, oldTree?: Tree, options?: { includedRanges?: Range[] }): Tree;
@@ -136,7 +136,7 @@ export interface QueryCapture {
   refutedProperties?: {[prop: string]: string | null},
 }
 
-export interface Query {
+export class Query {
   readonly predicates: { [name: string]: Function }[];
   readonly setProperties: any[];
   readonly assertedProperties: any[];
