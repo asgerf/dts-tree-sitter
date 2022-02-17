@@ -1,9 +1,12 @@
 export interface Parser {
-  parse(input: string | Input, previousTree?: Tree): Tree;
+  parse(input: string | Input | InputReader, oldTree?: Tree, options?: { bufferSize?: number, includedRanges?: Range[] }): Tree;
+  parseTextBuffer(buffer: TextBuffer, oldTree?: Tree, options?: { syncTimeoutMicros?: number, includedRanges?: Range[] }): Tree | Promise<Tree>;
+  parseTextBufferSync(buffer: TextBuffer, oldTree?: Tree, options?: { includedRanges?: Range[] }): Tree;
   getLanguage(): any;
   setLanguage(language: any): void;
   getLogger(): Logger;
   setLogger(logFunc: Logger): void;
+  printDotGraphs(enabled: boolean): void;
 }
 
 export type Point = {
@@ -12,8 +15,10 @@ export type Point = {
 };
 
 export type Range = {
-  start: Point;
-  end: Point;
+  startIndex: number,
+  endIndex: number,
+  startPosition: Point,
+  endPosition: Point
 };
 
 export type Edit = {
@@ -31,6 +36,12 @@ export type Logger = (
   type: "parse" | "lex"
 ) => void;
 
+export type TextBuffer = Buffer;
+
+export interface InputReader {
+  (index: any, position: Point): string;
+}
+
 export interface Input {
   seek(index: number): void;
   read(): any;
@@ -39,6 +50,7 @@ export interface Input {
 interface SyntaxNodeBase {
   tree: Tree;
   type: string;
+  typeId: string;
   isNamed: boolean;
   text: string;
   startPosition: Point;
@@ -90,7 +102,8 @@ export interface TreeCursor {
   endPosition: Point;
   startIndex: number;
   endIndex: number;
-  readonly currentNode: SyntaxNode
+  readonly currentNode: SyntaxNode;
+  readonly currentFieldName: string;
 
   reset(node: SyntaxNode): void
   gotoParent(): boolean;
@@ -106,6 +119,33 @@ export interface Tree {
   walk(): TreeCursor;
   getChangedRanges(other: Tree): Range[];
   getEditedRange(other: Tree): Range;
+  printDotGraph(): void;
+}
+
+export interface QueryMatch {
+  pattern: number,
+  captures: QueryCapture[],
+}
+
+export interface QueryCapture {
+  name: string,
+  text?: string,
+  node: SyntaxNode,
+  setProperties?: {[prop: string]: string | null},
+  assertedProperties?: {[prop: string]: string | null},
+  refutedProperties?: {[prop: string]: string | null},
+}
+
+export interface Query {
+  readonly predicates: { [name: string]: Function }[];
+  readonly setProperties: any[];
+  readonly assertedProperties: any[];
+  readonly refutedProperties: any[];
+
+  constructor(language: any, source: string | Buffer);
+
+  matches(rootNode: SyntaxNode, startPosition?: Point, endPosition?: Point): QueryMatch[];
+  captures(rootNode: SyntaxNode, startPosition?: Point, endPosition?: Point): QueryCapture[];
 }
 
 interface NamedNodeBase extends SyntaxNodeBase {
@@ -191,8 +231,10 @@ export const enum SyntaxType {
   DebuggerStatement = "debugger_statement",
   Decorator = "decorator",
   DoStatement = "do_statement",
+  ElseClause = "else_clause",
   EmptyStatement = "empty_statement",
   ExportClause = "export_clause",
+  ExportSpecifier = "export_specifier",
   ExportStatement = "export_statement",
   ExpressionStatement = "expression_statement",
   FinallyClause = "finally_clause",
@@ -206,6 +248,7 @@ export const enum SyntaxType {
   IfStatement = "if_statement",
   Import = "import",
   ImportClause = "import_clause",
+  ImportSpecifier = "import_specifier",
   ImportStatement = "import_statement",
   JsxAttribute = "jsx_attribute",
   JsxClosingElement = "jsx_closing_element",
@@ -225,13 +268,15 @@ export const enum SyntaxType {
   NestedIdentifier = "nested_identifier",
   NewExpression = "new_expression",
   Object = "object",
+  ObjectAssignmentPattern = "object_assignment_pattern",
   ObjectPattern = "object_pattern",
   Pair = "pair",
+  PairPattern = "pair_pattern",
   ParenthesizedExpression = "parenthesized_expression",
   Program = "program",
   PublicFieldDefinition = "public_field_definition",
   Regex = "regex",
-  RestParameter = "rest_parameter",
+  RestPattern = "rest_pattern",
   ReturnStatement = "return_statement",
   SequenceExpression = "sequence_expression",
   SpreadElement = "spread_element",
@@ -254,6 +299,7 @@ export const enum SyntaxType {
   WhileStatement = "while_statement",
   WithStatement = "with_statement",
   YieldExpression = "yield_expression",
+  Comment = "comment",
   EscapeSequence = "escape_sequence",
   False = "false",
   HashBangLine = "hash_bang_line",
@@ -265,6 +311,7 @@ export const enum SyntaxType {
   RegexFlags = "regex_flags",
   RegexPattern = "regex_pattern",
   ShorthandPropertyIdentifier = "shorthand_property_identifier",
+  ShorthandPropertyIdentifierPattern = "shorthand_property_identifier_pattern",
   StatementIdentifier = "statement_identifier",
   Super = "super",
   This = "this",
@@ -282,6 +329,7 @@ export type UnnamedType =
   | "%="
   | "&"
   | "&&"
+  | "&&="
   | "&="
   | "'"
   | "("
@@ -318,6 +366,9 @@ export type UnnamedType =
   | ">>>"
   | ">>>="
   | "?"
+  | "?."
+  | "??"
+  | "??="
   | "@"
   | "["
   | "]"
@@ -369,6 +420,7 @@ export type UnnamedType =
   | "|"
   | "|="
   | "||"
+  | "||="
   | "}"
   | "~"
   ;
@@ -377,8 +429,9 @@ export type TypeString = SyntaxType | UnnamedType;
 
 export type SyntaxNode = 
   | DeclarationNode
-  | DestructuringPatternNode
   | ExpressionNode
+  | PatternNode
+  | PrimaryExpressionNode
   | StatementNode
   | ArgumentsNode
   | ArrayNode
@@ -401,8 +454,10 @@ export type SyntaxNode =
   | DebuggerStatementNode
   | DecoratorNode
   | DoStatementNode
+  | ElseClauseNode
   | EmptyStatementNode
   | ExportClauseNode
+  | ExportSpecifierNode
   | ExportStatementNode
   | ExpressionStatementNode
   | FinallyClauseNode
@@ -416,6 +471,7 @@ export type SyntaxNode =
   | IfStatementNode
   | ImportNode
   | ImportClauseNode
+  | ImportSpecifierNode
   | ImportStatementNode
   | JsxAttributeNode
   | JsxClosingElementNode
@@ -435,13 +491,15 @@ export type SyntaxNode =
   | NestedIdentifierNode
   | NewExpressionNode
   | ObjectNode
+  | ObjectAssignmentPatternNode
   | ObjectPatternNode
   | PairNode
+  | PairPatternNode
   | ParenthesizedExpressionNode
   | ProgramNode
   | PublicFieldDefinitionNode
   | RegexNode
-  | RestParameterNode
+  | RestPatternNode
   | ReturnStatementNode
   | SequenceExpressionNode
   | SpreadElementNode
@@ -473,6 +531,7 @@ export type SyntaxNode =
   | UnnamedNode<"%=">
   | UnnamedNode<"&">
   | UnnamedNode<"&&">
+  | UnnamedNode<"&&=">
   | UnnamedNode<"&=">
   | UnnamedNode<"'">
   | UnnamedNode<"(">
@@ -509,6 +568,9 @@ export type SyntaxNode =
   | UnnamedNode<">>>">
   | UnnamedNode<">>>=">
   | UnnamedNode<"?">
+  | UnnamedNode<"?.">
+  | UnnamedNode<"??">
+  | UnnamedNode<"??=">
   | UnnamedNode<"@">
   | UnnamedNode<"[">
   | UnnamedNode<"]">
@@ -522,6 +584,7 @@ export type SyntaxNode =
   | UnnamedNode<"case">
   | UnnamedNode<"catch">
   | UnnamedNode<SyntaxType.Class>
+  | CommentNode
   | UnnamedNode<"const">
   | UnnamedNode<"continue">
   | UnnamedNode<"debugger">
@@ -556,6 +619,7 @@ export type SyntaxNode =
   | UnnamedNode<"return">
   | UnnamedNode<"set">
   | ShorthandPropertyIdentifierNode
+  | ShorthandPropertyIdentifierPatternNode
   | StatementIdentifierNode
   | UnnamedNode<"static">
   | SuperNode
@@ -576,6 +640,7 @@ export type SyntaxNode =
   | UnnamedNode<"|">
   | UnnamedNode<"|=">
   | UnnamedNode<"||">
+  | UnnamedNode<"||=">
   | UnnamedNode<"}">
   | UnnamedNode<"~">
   | ErrorNode
@@ -589,18 +654,32 @@ export type DeclarationNode =
   | VariableDeclarationNode
   ;
 
-export type DestructuringPatternNode = 
-  | ArrayPatternNode
-  | ObjectPatternNode
-  ;
-
 export type ExpressionNode = 
-  | ArrayNode
-  | ArrowFunctionNode
   | AssignmentExpressionNode
   | AugmentedAssignmentExpressionNode
   | AwaitExpressionNode
   | BinaryExpressionNode
+  | JsxElementNode
+  | JsxFragmentNode
+  | JsxSelfClosingElementNode
+  | NewExpressionNode
+  | PrimaryExpressionNode
+  | TernaryExpressionNode
+  | UnaryExpressionNode
+  | UpdateExpressionNode
+  | YieldExpressionNode
+  ;
+
+export type PatternNode = 
+  | ArrayPatternNode
+  | IdentifierNode
+  | ObjectPatternNode
+  | RestPatternNode
+  ;
+
+export type PrimaryExpressionNode = 
+  | ArrayNode
+  | ArrowFunctionNode
   | CallExpressionNode
   | ClassNode
   | FalseNode
@@ -608,12 +687,8 @@ export type ExpressionNode =
   | GeneratorFunctionNode
   | IdentifierNode
   | ImportNode
-  | JsxElementNode
-  | JsxFragmentNode
-  | JsxSelfClosingElementNode
   | MemberExpressionNode
   | MetaPropertyNode
-  | NewExpressionNode
   | NullNode
   | NumberNode
   | ObjectNode
@@ -621,21 +696,18 @@ export type ExpressionNode =
   | RegexNode
   | StringNode
   | SubscriptExpressionNode
+  | SuperNode
   | TemplateStringNode
-  | TernaryExpressionNode
   | ThisNode
   | TrueNode
-  | UnaryExpressionNode
   | UndefinedNode
-  | UpdateExpressionNode
-  | YieldExpressionNode
   ;
 
 export type StatementNode = 
-  | DeclarationNode
   | BreakStatementNode
   | ContinueStatementNode
   | DebuggerStatementNode
+  | DeclarationNode
   | DoStatementNode
   | EmptyStatementNode
   | ExportStatementNode
@@ -675,13 +747,13 @@ export interface ArrowFunctionNode extends NamedNodeBase {
 
 export interface AssignmentExpressionNode extends NamedNodeBase {
   type: SyntaxType.AssignmentExpression;
-  leftNode: DestructuringPatternNode | IdentifierNode | MemberExpressionNode | ParenthesizedExpressionNode | SubscriptExpressionNode;
+  leftNode: ArrayPatternNode | IdentifierNode | MemberExpressionNode | ObjectPatternNode | ParenthesizedExpressionNode | SubscriptExpressionNode;
   rightNode: ExpressionNode;
 }
 
 export interface AssignmentPatternNode extends NamedNodeBase {
   type: SyntaxType.AssignmentPattern;
-  leftNode: DestructuringPatternNode | ShorthandPropertyIdentifierNode;
+  leftNode: PatternNode;
   rightNode: ExpressionNode;
 }
 
@@ -698,7 +770,7 @@ export interface AwaitExpressionNode extends NamedNodeBase {
 export interface BinaryExpressionNode extends NamedNodeBase {
   type: SyntaxType.BinaryExpression;
   leftNode: ExpressionNode;
-  operatorNode: UnnamedNode<"!="> | UnnamedNode<"!=="> | UnnamedNode<"%"> | UnnamedNode<"&"> | UnnamedNode<"&&"> | UnnamedNode<"*"> | UnnamedNode<"**"> | UnnamedNode<"+"> | UnnamedNode<"-"> | UnnamedNode<"/"> | UnnamedNode<"<"> | UnnamedNode<"<<"> | UnnamedNode<"<="> | UnnamedNode<"=="> | UnnamedNode<"==="> | UnnamedNode<">"> | UnnamedNode<">="> | UnnamedNode<">>"> | UnnamedNode<">>>"> | UnnamedNode<"^"> | UnnamedNode<"in"> | UnnamedNode<"instanceof"> | UnnamedNode<"|"> | UnnamedNode<"||">;
+  operatorNode: UnnamedNode<"!="> | UnnamedNode<"!=="> | UnnamedNode<"%"> | UnnamedNode<"&"> | UnnamedNode<"&&"> | UnnamedNode<"*"> | UnnamedNode<"**"> | UnnamedNode<"+"> | UnnamedNode<"-"> | UnnamedNode<"/"> | UnnamedNode<"<"> | UnnamedNode<"<<"> | UnnamedNode<"<="> | UnnamedNode<"=="> | UnnamedNode<"==="> | UnnamedNode<">"> | UnnamedNode<">="> | UnnamedNode<">>"> | UnnamedNode<">>>"> | UnnamedNode<"??"> | UnnamedNode<"^"> | UnnamedNode<"in"> | UnnamedNode<"instanceof"> | UnnamedNode<"|"> | UnnamedNode<"||">;
   rightNode: ExpressionNode;
 }
 
@@ -710,13 +782,13 @@ export interface BreakStatementNode extends NamedNodeBase {
 export interface CallExpressionNode extends NamedNodeBase {
   type: SyntaxType.CallExpression;
   argumentsNode: ArgumentsNode | TemplateStringNode;
-  functionNode: ExpressionNode | FunctionNode | IdentifierNode | MemberExpressionNode | SuperNode;
+  functionNode: ExpressionNode;
 }
 
 export interface CatchClauseNode extends NamedNodeBase {
   type: SyntaxType.CatchClause;
   bodyNode: StatementBlockNode;
-  parameterNode?: DestructuringPatternNode | IdentifierNode;
+  parameterNode?: ArrayPatternNode | IdentifierNode | ObjectPatternNode;
 }
 
 export interface ClassNode extends NamedNodeBase {
@@ -765,12 +837,22 @@ export interface DoStatementNode extends NamedNodeBase {
   conditionNode: ParenthesizedExpressionNode;
 }
 
+export interface ElseClauseNode extends NamedNodeBase {
+  type: SyntaxType.ElseClause;
+}
+
 export interface EmptyStatementNode extends NamedNodeBase {
   type: SyntaxType.EmptyStatement;
 }
 
 export interface ExportClauseNode extends NamedNodeBase {
   type: SyntaxType.ExportClause;
+}
+
+export interface ExportSpecifierNode extends NamedNodeBase {
+  type: SyntaxType.ExportSpecifier;
+  aliasNode?: IdentifierNode;
+  nameNode: IdentifierNode;
 }
 
 export interface ExportStatementNode extends NamedNodeBase {
@@ -793,7 +875,7 @@ export interface FinallyClauseNode extends NamedNodeBase {
 export interface ForInStatementNode extends NamedNodeBase {
   type: SyntaxType.ForInStatement;
   bodyNode: StatementNode;
-  leftNode: DestructuringPatternNode | IdentifierNode | MemberExpressionNode | ParenthesizedExpressionNode | SubscriptExpressionNode;
+  leftNode: ArrayPatternNode | IdentifierNode | MemberExpressionNode | ObjectPatternNode | ParenthesizedExpressionNode | SubscriptExpressionNode;
   rightNode: ExpressionNode | SequenceExpressionNode;
 }
 
@@ -839,7 +921,7 @@ export interface GeneratorFunctionDeclarationNode extends NamedNodeBase {
 
 export interface IfStatementNode extends NamedNodeBase {
   type: SyntaxType.IfStatement;
-  alternativeNode?: StatementNode;
+  alternativeNode?: ElseClauseNode;
   conditionNode: ParenthesizedExpressionNode;
   consequenceNode: StatementNode;
 }
@@ -852,9 +934,15 @@ export interface ImportClauseNode extends NamedNodeBase {
   type: SyntaxType.ImportClause;
 }
 
+export interface ImportSpecifierNode extends NamedNodeBase {
+  type: SyntaxType.ImportSpecifier;
+  aliasNode?: IdentifierNode;
+  nameNode: IdentifierNode;
+}
+
 export interface ImportStatementNode extends NamedNodeBase {
   type: SyntaxType.ImportStatement;
-  sourceNode?: StringNode;
+  sourceNode: StringNode;
 }
 
 export interface JsxAttributeNode extends NamedNodeBase {
@@ -907,7 +995,7 @@ export interface LexicalDeclarationNode extends NamedNodeBase {
 
 export interface MemberExpressionNode extends NamedNodeBase {
   type: SyntaxType.MemberExpression;
-  objectNode: ExpressionNode | IdentifierNode | MemberExpressionNode | SuperNode;
+  objectNode: ExpressionNode;
   propertyNode: PropertyIdentifierNode;
 }
 
@@ -938,11 +1026,17 @@ export interface NestedIdentifierNode extends NamedNodeBase {
 export interface NewExpressionNode extends NamedNodeBase {
   type: SyntaxType.NewExpression;
   argumentsNode?: ArgumentsNode;
-  constructorNode: ArrayNode | ArrowFunctionNode | ClassNode | FalseNode | FunctionNode | GeneratorFunctionNode | IdentifierNode | ImportNode | MemberExpressionNode | MetaPropertyNode | NewExpressionNode | NullNode | NumberNode | ObjectNode | ParenthesizedExpressionNode | RegexNode | StringNode | SubscriptExpressionNode | TemplateStringNode | ThisNode | TrueNode | UndefinedNode;
+  constructorNode: PrimaryExpressionNode;
 }
 
 export interface ObjectNode extends NamedNodeBase {
   type: SyntaxType.Object;
+}
+
+export interface ObjectAssignmentPatternNode extends NamedNodeBase {
+  type: SyntaxType.ObjectAssignmentPattern;
+  leftNode: ArrayPatternNode | ObjectPatternNode | ShorthandPropertyIdentifierPatternNode;
+  rightNode: ExpressionNode;
 }
 
 export interface ObjectPatternNode extends NamedNodeBase {
@@ -953,6 +1047,12 @@ export interface PairNode extends NamedNodeBase {
   type: SyntaxType.Pair;
   keyNode: ComputedPropertyNameNode | NumberNode | PropertyIdentifierNode | StringNode;
   valueNode: ExpressionNode;
+}
+
+export interface PairPatternNode extends NamedNodeBase {
+  type: SyntaxType.PairPattern;
+  keyNode: ComputedPropertyNameNode | NumberNode | PropertyIdentifierNode | StringNode;
+  valueNode: PatternNode;
 }
 
 export interface ParenthesizedExpressionNode extends NamedNodeBase {
@@ -975,8 +1075,8 @@ export interface RegexNode extends NamedNodeBase {
   patternNode: RegexPatternNode;
 }
 
-export interface RestParameterNode extends NamedNodeBase {
-  type: SyntaxType.RestParameter;
+export interface RestPatternNode extends NamedNodeBase {
+  type: SyntaxType.RestPattern;
 }
 
 export interface ReturnStatementNode extends NamedNodeBase {
@@ -1004,7 +1104,7 @@ export interface StringNode extends NamedNodeBase {
 export interface SubscriptExpressionNode extends NamedNodeBase {
   type: SyntaxType.SubscriptExpression;
   indexNode: ExpressionNode | SequenceExpressionNode;
-  objectNode: ExpressionNode | SuperNode;
+  objectNode: ExpressionNode;
 }
 
 export interface SwitchBodyNode extends NamedNodeBase {
@@ -1070,7 +1170,7 @@ export interface VariableDeclarationNode extends NamedNodeBase {
 
 export interface VariableDeclaratorNode extends NamedNodeBase {
   type: SyntaxType.VariableDeclarator;
-  nameNode: DestructuringPatternNode | IdentifierNode;
+  nameNode: ArrayPatternNode | IdentifierNode | ObjectPatternNode;
   valueNode?: ExpressionNode;
 }
 
@@ -1088,6 +1188,10 @@ export interface WithStatementNode extends NamedNodeBase {
 
 export interface YieldExpressionNode extends NamedNodeBase {
   type: SyntaxType.YieldExpression;
+}
+
+export interface CommentNode extends NamedNodeBase {
+  type: SyntaxType.Comment;
 }
 
 export interface EscapeSequenceNode extends NamedNodeBase {
@@ -1132,6 +1236,10 @@ export interface RegexPatternNode extends NamedNodeBase {
 
 export interface ShorthandPropertyIdentifierNode extends NamedNodeBase {
   type: SyntaxType.ShorthandPropertyIdentifier;
+}
+
+export interface ShorthandPropertyIdentifierPatternNode extends NamedNodeBase {
+  type: SyntaxType.ShorthandPropertyIdentifierPattern;
 }
 
 export interface StatementIdentifierNode extends NamedNodeBase {
