@@ -1,6 +1,8 @@
 {
     "include": ["src"],
     "compilerOptions": {
+        "target": "es2018",
+        "module": "node16",
         "strict": true,
         "outDir": "build/src",
     }
