@@ -270,7 +270,7 @@ function generateRootUnion(json: NodeTypeEntry[], index: IndexedData, printer: P
 
 function generateUnion(name: string, members: NodeTypeRef[], index: IndexedData, printer: Printer) {
     printer
-        .println(`export type ${name} = `)
+        .println(`export type ${name} =`)
         .indent()
         .forEach(members, ref => {
             printer.println('| ' + getTypeExprFromRef(ref, index))
