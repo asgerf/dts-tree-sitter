@@ -183,7 +183,7 @@ export type TypedTreeCursor = TreeCursorRecord[keyof TreeCursorRecord];
 
 export interface ErrorNode extends NamedNodeBase {
     type: SyntaxType.ERROR;
-    hasError(): true;
+    hasError: true;
 }
 `);
 }
