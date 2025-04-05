@@ -18,9 +18,11 @@
         "gen-example-now": "node build/src/index.js tree-sitter-javascript > examples/javascript/generated.d.ts",
         "gen-example": "tsc -p . && npm run gen-example-now",
         "run-example": "tsc -p examples/javascript && node build/examples/javascript",
-        "prepare": "tsc -p ."
+        "prepare": "tsc -p . && chmod +x build/src/index.js"
     },
-    "main": "build/src/index.js",
+    "bin": {
+        "dts-tree-sitter": "./build/src/index.js"
+    },
     "files": [
         "build/src"
     ]
