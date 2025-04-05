@@ -38,7 +38,7 @@ function printFunctionNames() {
     do {
         const c = cursor as g.TypedTreeCursor;
         switch (c.nodeType) {
-            case g.SyntaxType.Function:
+            case g.SyntaxType.FunctionExpression:
             case g.SyntaxType.FunctionDeclaration: {
                 let node = c.currentNode;
                 if (node.isNamed && node.nameNode != null) {
@@ -60,7 +60,7 @@ function getMemberNames(node: g.ClassDeclarationNode) {
     for (let member of node.bodyNode.memberNodes) {
         if (member.type === g.SyntaxType.MethodDefinition) {
             result.push(member.nameNode.text);
-        } else {
+        } else if (member.type === g.SyntaxType.FieldDefinition) {
             result.push(member.propertyNode.text);
         }
     }
@@ -81,16 +81,16 @@ function gotoPreorderSucc(cursor: g.TreeCursor): boolean {
 printDeclaredNames();
 printFunctionNames();
 
-function printParameters1(node: g.SyntaxNode) {
-    // 'node.isNamed' is needed since there is both a named and an unnamed node whose type is 'function'.
-    if (node.isNamed && node.type === g.SyntaxType.Function) {
-        console.log(node.parametersNode.text);
+function printClassName1(node: g.SyntaxNode) {
+    // 'node.isNamed' is needed since there is both a named and an unnamed node whose type is 'class'.
+    if (node.isNamed && node.type === g.SyntaxType.Class) {
+        console.log(node.nameNode?.text);
     }
 }
 
-function printParameters2(node: g.NamedNode) {
+function printClassName2(node: g.NamedNode) {
     // If 'node' is typed as 'NamedNode' there is no need for the 'isNamed' check.
-    if (node.type === g.SyntaxType.Function) {
+    if (node.type === g.SyntaxType.Class) {
         console.log(node.nameNode?.text);
     }
 }
