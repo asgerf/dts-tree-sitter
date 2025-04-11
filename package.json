@@ -21,7 +21,7 @@
         "prepare": "tsc -p . && chmod +x build/src/index.js"
     },
     "bin": {
-        "dts-tree-sitter": "./build/src/index.js"
+        "dts-tree-sitter": "build/src/index.js"
     },
     "files": [
         "build/src"
