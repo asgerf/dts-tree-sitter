@@ -1,6 +1,6 @@
 {
     "name": "@asgerf/dts-tree-sitter",
-    "version": "0.1.0",
+    "version": "0.21.0",
     "description": "Generates TypeScript .d.ts files for using tree-sitter grammars.",
     "dependencies": {
         "tree-sitter": "^0.21.1"
