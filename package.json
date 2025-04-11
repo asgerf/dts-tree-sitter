@@ -3,21 +3,26 @@
     "version": "0.1.0",
     "description": "Generates TypeScript .d.ts files for using tree-sitter grammars.",
     "dependencies": {
-        "tree-sitter": "^0.16.1"
+        "tree-sitter": "^0.21.1"
     },
     "devDependencies": {
-        "@types/node": "^14.0.14",
-        "tree-sitter-javascript": "^0.16.0",
-        "typescript": "^3.9.6"
+        "@types/node": "^16.0.0",
+        "tree-sitter-javascript": "^0.23.0",
+        "typescript": "^5.0.0"
+    },
+    "engines": {
+        "node": ">=16"
     },
     "scripts": {
         "watch": "tsc -p .; tsc -p . -w",
         "gen-example-now": "node build/src/index.js tree-sitter-javascript > examples/javascript/generated.d.ts",
         "gen-example": "tsc -p . && npm run gen-example-now",
         "run-example": "tsc -p examples/javascript && node build/examples/javascript",
-        "prepare": "tsc -p ."
+        "prepare": "tsc -p . && chmod +x build/src/index.js"
     },
-    "main": "build/src/index.js",
+    "bin": {
+        "dts-tree-sitter": "./build/src/index.js"
+    },
     "files": [
         "build/src"
     ]

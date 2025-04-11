@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import * as fs from "fs";
 import * as pathlib from "path";
 
@@ -183,7 +185,7 @@ export type TypedTreeCursor = TreeCursorRecord[keyof TreeCursorRecord];
 
 export interface ErrorNode extends NamedNodeBase {
     type: SyntaxType.ERROR;
-    hasError(): true;
+    hasError: true;
 }
 `);
 }
@@ -270,7 +272,7 @@ function generateRootUnion(json: NodeTypeEntry[], index: IndexedData, printer: P
 
 function generateUnion(name: string, members: NodeTypeRef[], index: IndexedData, printer: Printer) {
     printer
-        .println(`export type ${name} = `)
+        .println(`export type ${name} =`)
         .indent()
         .forEach(members, ref => {
             printer.println('| ' + getTypeExprFromRef(ref, index))
@@ -286,7 +288,6 @@ function generateModifiedTreeSitterDts(json: NodeTypeEntry[], dtsText: string, p
         .replace('export = Parser', '')
         .replace(/namespace Parser {(.*)}/s, (str, p1) => p1.replace(/^  /gm, ''))
         .replace(/^\s*(class|interface|namespace)/gm, 'export $1')
-        .replace(/\bexport class\b/g, 'export interface')
         .replace(/\bParser\.(\w+)\b/g, "$1")
         .replace('export interface SyntaxNode', 'interface SyntaxNodeBase')
         .replace(/closest\(\w+:.*\): SyntaxNode \| null;/,
